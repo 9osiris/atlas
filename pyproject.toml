@@ -1,0 +1,20 @@
+[project]
+name = "atlas"
+version = "1.0.0"
+description = "knowledge graph from your notes"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "osiris"}]
+keywords = ["agents", "ai", "knowledge-graph", "cognitive-architecture", "python"]
+
+[project.scripts]
+atlas = "atlas.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["atlas*"]
