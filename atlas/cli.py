@@ -63,6 +63,9 @@ def cmd_build(args):
         if args.show:
             for subj, rel, obj, sent, _src in triples:
                 print("  %s --%s--> %s" % (subj, rel, obj))
+    if args.merge_aliases:
+        for old, new in graph.merge_aliases():
+            print("merged alias: %s -> %s" % (old, new))
     graph.save(args.out)
     stats = graph.stats()
     print("built %s: %d nodes, %d edges from %d files"
@@ -188,6 +191,9 @@ def build_parser():
                    help="graph file to write (default atlas.json)")
     p.add_argument("--show", action="store_true",
                    help="print each extracted triple")
+    p.add_argument("--merge-aliases", action="store_true",
+                   help="merge entities whose name is a word subset of "
+                        "another, so noah and noah tyler become one node")
     p.add_argument("--llm", action="store_true",
                    help="also extract triples with a model")
     p.add_argument("--base-url", default="https://api.openai.com",
