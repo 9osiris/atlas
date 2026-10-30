@@ -50,6 +50,22 @@ capitalized phrase after the verb, or the raw phrase when there is
 none, so "uses an agent loop" still lands. same triple twice just
 bumps its weight.
 
+merging aliases
+notes are messy: one file says "noah" and another says "noah tyler"
+and you get two nodes that are obviously the same person. build with
+--merge-aliases and any entity whose name is a word subset of another
+gets folded into the longer one, counts and sources combined, edges
+rewired. it prints every merge it makes:
+
+```
+atlas build -s ./notes -o graph.json --merge-aliases
+merged alias: Noah -> Noah Tyler
+```
+
+it is opt-in because the rule is dumb and it will merge things you
+did not want merged, like new york and new york times. read the
+printed list before you trust the graph.
+
 llm mode
 if the regexes miss too much, --llm asks a model for triples instead.
 it needs an openai-compatible endpoint:
