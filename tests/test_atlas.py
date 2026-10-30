@@ -75,7 +75,7 @@ class TestTriples(unittest.TestCase):
         self.check("Mule uses an agent loop.",
                    [("Mule", "uses", "agent loop")])
         self.check("Silk runs on Windows.",
-                   [("Silk", "runs_on", "Windows")])
+                   [("Silk", "runs on", "Windows")])
 
     def test_part_of_and_lives_in(self):
         self.check("Mule is part of the Fibre project.",
@@ -312,6 +312,92 @@ class TestCLI(unittest.TestCase):
     def test_missing_graph(self):
         code, _ = self.run_cli(["stats", "/tmp/does-not-exist-atlas.json"])
         self.assertEqual(code, 1)
+
+
+class TestMergeAliases(unittest.TestCase):
+    def test_subset_merges_into_longer(self):
+        g = Graph()
+        g.add_entity("Noah", count=True)
+        g.add_entity("Noah Tyler", count=True)
+        g.add_triple("Noah", "created", "Mule")
+        merges = g.merge_aliases()
+        self.assertEqual(merges, [("Noah", "Noah Tyler")])
+        self.assertNotIn("noah", g.nodes)
+        self.assertEqual(g.nodes["noah tyler"]["count"], 2)
+        self.assertEqual(len(g.edges), 1)
+        self.assertEqual(g.edges[0]["src"], "noah tyler")
+
+    def test_chain_folds_to_longest(self):
+        g = Graph()
+        g.add_entity("Noah", count=True)
+        g.add_entity("Noah Tyler", count=True)
+        g.add_entity("Noah Tyler Jr", count=True)
+        merges = g.merge_aliases()
+        self.assertEqual(merges, [("Noah", "Noah Tyler Jr"),
+                                  ("Noah Tyler", "Noah Tyler Jr")])
+        self.assertEqual(list(g.nodes), ["noah tyler jr"])
+        self.assertEqual(g.nodes["noah tyler jr"]["count"], 3)
+
+    def test_duplicate_edges_collapse(self):
+        g = Graph()
+        g.add_triple("Noah", "created", "Mule")
+        g.add_triple("Noah Tyler", "created", "Mule")
+        g.merge_aliases()
+        self.assertEqual(len(g.edges), 1)
+        self.assertEqual(g.edges[0]["weight"], 2)
+
+    def test_self_loop_dropped(self):
+        g = Graph()
+        g.add_triple("Noah", "knows", "Noah Tyler")
+        g.merge_aliases()
+        self.assertEqual(g.edges, [])
+
+    def test_no_subset_no_merge(self):
+        g = Graph()
+        g.add_triple("Noah Tyler", "created", "Mule")
+        self.assertEqual(g.merge_aliases(), [])
+        self.assertEqual(len(g.nodes), 2)
+
+    def test_same_words_different_order_not_merged(self):
+        g = Graph()
+        g.add_entity("Noah Tyler", count=True)
+        g.add_entity("Tyler Noah", count=True)
+        self.assertEqual(g.merge_aliases(), [])
+
+    def test_merges_reported_sorted(self):
+        g = Graph()
+        g.add_entity("Noah", count=True)
+        g.add_entity("Noah Tyler", count=True)
+        g.add_entity("Fibre", count=True)
+        g.add_entity("Fibre Project", count=True)
+        merges = g.merge_aliases()
+        self.assertEqual(merges, [("Fibre", "Fibre Project"),
+                                  ("Noah", "Noah Tyler")])
+
+    def test_sources_combined(self):
+        g = Graph()
+        g.add_entity("Noah", source="a.md")
+        g.add_entity("Noah Tyler", source="b.md")
+        g.merge_aliases()
+        node = g.nodes["noah tyler"]
+        self.assertEqual(node["sources"], {"a.md", "b.md"})
+
+    def test_cli_merge_aliases_flag(self):
+        with tempfile.TemporaryDirectory() as d:
+            notes = os.path.join(d, "notes.md")
+            with open(notes, "w") as f:
+                f.write("Noah Tyler built Mule.\nNoah demoed Mule yesterday.\n")
+            graph = os.path.join(d, "g.json")
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = main(["build", "-s", d, "-o", graph,
+                             "--merge-aliases"])
+            out = buf.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("merged alias: Noah -> Noah Tyler", out)
+            loaded = Graph.load(graph)
+            self.assertNotIn("noah", loaded.nodes)
+            self.assertEqual(loaded.nodes["noah tyler"]["count"], 2)
 
 
 if __name__ == "__main__":
