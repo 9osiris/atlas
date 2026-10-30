@@ -115,6 +115,83 @@ class Graph:
                         key=lambda kv: (-kv[1]["count"], kv[1]["name"].lower()))
         return [(node["name"], node["count"]) for _, node in ranked[:n]]
 
+    def merge_aliases(self):
+        """fold word-subset aliases into their longest member.
+
+        "noah" and "noah tyler" become one node: counts and sources are
+        combined, edges are rewired, duplicate edges collapse into one
+        with summed weights, and self-loops from the merge are dropped.
+        returns a sorted list of (merged name, kept name)."""
+        keys = list(self.nodes)
+        parent = {k: k for k in keys}
+
+        def root(k):
+            while parent[k] != k:
+                parent[k] = parent[parent[k]]
+                k = parent[k]
+            return k
+
+        words = {k: set(k.split()) for k in keys}
+        for i, a in enumerate(keys):
+            for b in keys[i + 1:]:
+                wa, wb = words[a], words[b]
+                ra, rb = root(a), root(b)
+                if ra == rb:
+                    continue
+                # strict subset joins, pointing the smaller at the larger
+                if wa < wb:
+                    parent[ra] = rb
+                elif wb < wa:
+                    parent[rb] = ra
+
+        groups = {}
+        for k in keys:
+            groups.setdefault(root(k), []).append(k)
+
+        # canonical key per group, longest name wins so the specific
+        # form survives, then most mentions, then alphabetical
+        canon = {}
+        for group in groups.values():
+            keep = sorted(group, key=lambda k: (-len(self.nodes[k]["name"]),
+                                                -self.nodes[k]["count"],
+                                                k))[0]
+            for k in group:
+                canon[k] = keep
+
+        merges = []
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            keep = canon[group[0]]
+            knode = self.nodes[keep]
+            for alias in group:
+                if alias == keep:
+                    continue
+                anode = self.nodes[alias]
+                merges.append((anode["name"], knode["name"]))
+                knode["count"] += anode["count"]
+                knode["sources"] |= anode["sources"]
+                del self.nodes[alias]
+
+        deduped = []
+        seen = {}
+        for edge in self.edges:
+            src, dst = canon[edge["src"]], canon[edge["dst"]]
+            if src == dst:
+                continue
+            key = (src, edge["rel"], dst)
+            if key in seen:
+                other = seen[key]
+                other["weight"] += edge["weight"]
+                other["sources"] |= edge["sources"]
+            else:
+                edge["src"], edge["dst"] = src, dst
+                deduped.append(edge)
+                seen[key] = edge
+        self.edges = deduped
+        merges.sort(key=lambda pair: pair[0].lower())
+        return merges
+
     def stats(self):
         rels = Counter(e["rel"] for e in self.edges)
         return {
