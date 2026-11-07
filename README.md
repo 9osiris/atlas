@@ -66,6 +66,22 @@ it is opt-in because the rule is dumb and it will merge things you
 did not want merged, like new york and new york times. read the
 printed list before you trust the graph.
 
+co-occurrence edges
+sometimes two things never get a verb between them, they just keep
+showing up in the same sentence. build with --cooccur and any two
+entities that share a sentence get a co_occurs_with edge between
+them, weight counts how many sentences they share:
+
+```
+atlas build -s ./notes -o graph.json --cooccur
+atlas query Mule --rel co_occurs_with
+```
+
+it is opt-in because it adds a lot of edges on dense notes, and
+weak links (weight 1) are mostly noise. sort by weight and read the
+heavy ones. co-occurrence edges survive --merge-aliases, they get
+rewired and collapsed like any other edge.
+
 llm mode
 if the regexes miss too much, --llm asks a model for triples instead.
 it needs an openai-compatible endpoint:
