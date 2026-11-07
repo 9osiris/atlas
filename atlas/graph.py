@@ -42,6 +42,16 @@ class Graph:
         self.edges.append(edge)
         return edge
 
+    def add_cooccurrence(self, a, b, source=None):
+        # one undirected edge per pair, stored alphabetically so
+        # (a, b) and (b, a) collapse into the same edge and the
+        # weight counts the sentences the two share
+        if norm(a) == norm(b):
+            return None
+        first, second = sorted((a, b), key=norm)
+        return self.add_triple(first, "co_occurs_with", second,
+                               source=source)
+
     def find(self, name):
         """exact key match, else first name containing the query."""
         key = norm(name)
