@@ -13,9 +13,9 @@ from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from atlas.extract import (clean_object, extract_document,
-                           extract_entities, extract_triples, find_entities,
-                           split_sentences)
+from atlas.extract import (clean_object, extract_cooccurrences,
+                           extract_document, extract_entities,
+                           extract_triples, find_entities, split_sentences)
 from atlas.graph import Graph
 from atlas.llm import LLMError, extract_with_llm
 from atlas.cli import main
@@ -75,7 +75,7 @@ class TestTriples(unittest.TestCase):
         self.check("Mule uses an agent loop.",
                    [("Mule", "uses", "agent loop")])
         self.check("Silk runs on Windows.",
-                   [("Silk", "runs on", "Windows")])
+                   [("Silk", "runs_on", "Windows")])
 
     def test_part_of_and_lives_in(self):
         self.check("Mule is part of the Fibre project.",
@@ -398,6 +398,85 @@ class TestMergeAliases(unittest.TestCase):
             loaded = Graph.load(graph)
             self.assertNotIn("noah", loaded.nodes)
             self.assertEqual(loaded.nodes["noah tyler"]["count"], 2)
+
+
+class TestCooccurrence(unittest.TestCase):
+    def test_pair_per_shared_sentence(self):
+        pairs = extract_cooccurrences("Mule and Fibre ship together.")
+        self.assertEqual(pairs, [("Fibre", "Mule")])
+
+    def test_three_entities_give_three_pairs(self):
+        pairs = extract_cooccurrences("Noah Tyler built Mule with Fibre.")
+        self.assertEqual(sorted(pairs),
+                         [("Fibre", "Mule"), ("Fibre", "Noah Tyler"),
+                          ("Mule", "Noah Tyler")])
+
+    def test_same_entity_twice_in_one_sentence_is_one_pair(self):
+        pairs = extract_cooccurrences("Mule talks about Mule and Fibre.")
+        self.assertEqual(pairs, [("Fibre", "Mule")])
+
+    def test_single_entity_gives_nothing(self):
+        self.assertEqual(extract_cooccurrences("Mule is fast."), [])
+
+    def test_no_verb_needed(self):
+        # co-occurrence fires on shared sentences, not verb patterns
+        pairs = extract_cooccurrences("Fibre and Mule are both tools.")
+        self.assertEqual(pairs, [("Fibre", "Mule")])
+
+    def test_graph_edge_weight_counts_sentences(self):
+        g = Graph()
+        g.add_cooccurrence("Mule", "Fibre")
+        g.add_cooccurrence("Fibre", "Mule")
+        self.assertEqual(len(g.edges), 1)
+        edge = g.edges[0]
+        self.assertEqual(edge["rel"], "co_occurs_with")
+        self.assertEqual(edge["weight"], 2)
+        self.assertEqual(edge["src"], "fibre")
+
+    def test_graph_self_pair_ignored(self):
+        g = Graph()
+        self.assertIsNone(g.add_cooccurrence("Mule", "Mule"))
+        self.assertEqual(g.edges, [])
+
+    def test_graph_cooccur_survives_alias_merge(self):
+        g = Graph()
+        g.add_cooccurrence("Noah", "Mule")
+        g.add_cooccurrence("Noah Tyler", "Mule")
+        g.merge_aliases()
+        self.assertEqual(len(g.edges), 1)
+        self.assertEqual(g.edges[0]["weight"], 2)
+        self.assertEqual(g.edges[0]["src"], "mule")
+
+    def test_cli_cooccur_flag(self):
+        with tempfile.TemporaryDirectory() as d:
+            notes = os.path.join(d, "notes.md")
+            with open(notes, "w") as f:
+                f.write("Mule and Fibre ship together.\n"
+                        "Mule and Fibre share a repo.\n")
+            graph = os.path.join(d, "g.json")
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = main(["build", "-s", d, "-o", graph, "--cooccur"])
+            self.assertEqual(code, 0)
+            loaded = Graph.load(graph)
+            edge = [e for e in loaded.edges
+                    if e["rel"] == "co_occurs_with"][0]
+            self.assertEqual(edge["weight"], 2)
+            rows = loaded.neighbors("Mule", rel="co_occurs_with")
+            self.assertEqual(rows, [("co_occurs_with", "Fibre", 2, True)])
+
+    def test_cli_default_build_has_no_cooccur_edges(self):
+        with tempfile.TemporaryDirectory() as d:
+            graph = os.path.join(d, "g.json")
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = main(["build", "-s", CORPUS, "-o", graph])
+            out = buf.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("15 nodes, 16 edges", out)
+            loaded = Graph.load(graph)
+            rels = {e["rel"] for e in loaded.edges}
+            self.assertNotIn("co_occurs_with", rels)
 
 
 if __name__ == "__main__":
