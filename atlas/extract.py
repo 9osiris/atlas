@@ -128,8 +128,24 @@ def extract_entities(text):
     return counts, seen
 
 
+def extract_cooccurrences(text):
+    """(a, b) pairs of entities sharing a sentence, one pair per
+    sentence per entity pair. pairs are sorted by normalized key so
+    the direction is stable no matter the order they appear in."""
+    pairs = []
+    for sentence in split_sentences(text):
+        seen = {}
+        for name, _, _ in find_entities(sentence):
+            seen.setdefault(norm(name), name)
+        keys = sorted(seen)
+        for i, a in enumerate(keys):
+            for b in keys[i + 1:]:
+                pairs.append((seen[a], seen[b]))
+    return pairs
+
+
 def extract_document(text, source=None):
     """everything one file gives us: entities, triples."""
-    counts, seen, triples = extract_entities(text)
+    counts, seen = extract_entities(text)
     triples = extract_triples(text, source=source)
     return counts, seen, triples
