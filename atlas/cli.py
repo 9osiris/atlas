@@ -6,7 +6,7 @@ import os
 import sys
 
 from . import VERSION
-from .extract import extract_document, norm
+from .extract import extract_cooccurrences, extract_document, norm
 from .graph import Graph
 from .llm import LLMError, extract_with_llm
 
@@ -50,6 +50,9 @@ def cmd_build(args):
                 graph.add_entity(seen[key], source=path)
         for subj, rel, obj, _sent, _src in triples:
             graph.add_triple(subj, rel, obj, source=path)
+        if args.cooccur:
+            for a, b in extract_cooccurrences(text):
+                graph.add_cooccurrence(a, b, source=path)
         if args.llm:
             try:
                 llm_triples = extract_with_llm(text, args.base_url,
@@ -194,6 +197,10 @@ def build_parser():
     p.add_argument("--merge-aliases", action="store_true",
                    help="merge entities whose name is a word subset of "
                         "another, so noah and noah tyler become one node")
+    p.add_argument("--cooccur", action="store_true",
+                   help="link entities that share a sentence with a "
+                        "co_occurs_with edge, weight counts the sentences "
+                        "they share")
     p.add_argument("--llm", action="store_true",
                    help="also extract triples with a model")
     p.add_argument("--base-url", default="https://api.openai.com",
