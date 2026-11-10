@@ -1,6 +1,6 @@
 """atlas: a knowledge graph built from your notes."""
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 from .graph import Graph
 from .extract import (extract_cooccurrences, extract_document,
