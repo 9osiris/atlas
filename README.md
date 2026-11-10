@@ -82,6 +82,21 @@ weak links (weight 1) are mostly noise. sort by weight and read the
 heavy ones. co-occurrence edges survive --merge-aliases, they get
 rewired and collapsed like any other edge.
 
+watch mode
+if you keep editing notes and hate rebuilding by hand, watch does it
+for you. it builds once, then checks the sources every couple seconds
+and rebuilds whenever a file is added, removed, or changed:
+
+```
+atlas watch -s ./notes -o graph.json
+atlas watch -s ./notes --merge-aliases --interval 5
+```
+
+it prints which file changed and the new node and edge counts. ctrl-c
+stops it. --merge-aliases and --cooccur work the same as build. --llm
+is off in watch on purpose, it would call the model again on every
+save.
+
 llm mode
 if the regexes miss too much, --llm asks a model for triples instead.
 it needs an openai-compatible endpoint:
