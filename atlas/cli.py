@@ -37,7 +37,7 @@ def read_text(path):
         return f.read()
 
 
-def cmd_build(args):
+def do_build(args):
     graph = Graph()
     files = list(iter_files(args.sources))
     if not files:
@@ -74,6 +74,16 @@ def cmd_build(args):
     print("built %s: %d nodes, %d edges from %d files"
           % (args.out, stats["nodes"], stats["edges"], len(files)))
     return 0
+
+
+def cmd_build(args):
+    return do_build(args)
+
+
+def cmd_watch(args):
+    from .watch import run_watch
+    args.llm = False
+    return run_watch(args, interval=args.interval)
 
 
 def load_graph(path):
@@ -210,6 +220,24 @@ def build_parser():
     p.add_argument("--model", default="gpt-4o-mini",
                    help="model for llm extraction")
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser("watch", help="rebuild the graph when notes change")
+    p.add_argument("-s", "--sources", nargs="+", required=True,
+                   help="files or directories to read")
+    p.add_argument("-o", "--out", default="atlas.json",
+                   help="graph file to write (default atlas.json)")
+    p.add_argument("--show", action="store_true",
+                   help="print each extracted triple")
+    p.add_argument("--merge-aliases", action="store_true",
+                   help="merge entities whose name is a word subset of "
+                        "another, so noah and noah tyler become one node")
+    p.add_argument("--cooccur", action="store_true",
+                   help="link entities that share a sentence with a "
+                        "co_occurs_with edge, weight counts the sentences "
+                        "they share")
+    p.add_argument("--interval", type=float, default=2.0,
+                   help="seconds between checks (default 2)")
+    p.set_defaults(func=cmd_watch)
 
     p = sub.add_parser("query", help="show what an entity connects to")
     p.add_argument("name", help="entity name, substring match ok")
